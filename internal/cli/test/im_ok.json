@@ -1,0 +1,7 @@
+{
+    "imports": {
+        "lib": "./js/lib.js",
+        "lib/ref": "./js/ref.js",
+        "sub/": "./js/sub/"
+    }
+}
