@@ -16,7 +16,7 @@ Run with `--help` or `-h` for options.
 
 Note: A C compiler is required to build the QuickJS dependency. On Windows you can follow the instructions for MSYS2 as described here: https://github.com/rogchap/v8go#windows
 
-Build: `go build github.com/cleiner/svecl/cmd/...`
+Build: `go build ./cmd/...`
 
 Run tests: `go test ./...`
 
