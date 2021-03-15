@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  artifacts:
+    name: Build Artifacts
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        include:
+        - os: 'ubuntu-latest'
+          artifact: 'svecl-linux-x86_64.tar.gz'
+        - os: 'macos-latest'
+          artifact: 'svecl-macos-x86_64.tar.gz'
+        - os: 'windows-latest'
+          artifact: 'svecl-windows-x86_64.zip'
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16.x
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Build
+      run: 'go build ./cmd/...'
+    - name: Test
+      run: 'go test -v ./...'
+    - name: Zip
+      if: matrix.os == 'windows-latest'
+      run: 'Compress-Archive -CompressionLevel Optimal -Force -Path LICENSE,NOTICE.md,svecl.exe -DestinationPath ${{ matrix.artifact }}'
+    - name: Tar
+      if: matrix.os != 'windows-latest'
+      run: 'tar -czvf ${{ matrix.artifact }} LICENSE NOTICE.md svecl'
+    - name: Upload
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ matrix.artifact }}
+        path: ${{ matrix.artifact }}
+        if-no-files-found: error
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: artifacts
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+  attach:
+    name: Attach Release Artifacts
+    runs-on: ubuntu-latest
+    needs: [artifacts, release]
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        include:
+        - os: 'ubuntu-latest'
+          artifact: 'svecl-linux-x86_64.tar.gz'
+          content-type: 'application/gzip'
+        - os: 'macos-latest'
+          artifact: 'svecl-macos-x86_64.tar.gz'
+          content-type: 'application/gzip'
+        - os: 'windows-latest'
+          artifact: 'svecl-windows-x86_64.zip'
+          content-type: 'application/zip'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Download
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ matrix.artifact }}
+    - name: Attach
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.release.outputs.upload_url }}
+        asset_path: ./${{ matrix.artifact }}
+        asset_name: ${{ matrix.artifact }}
+        asset_content_type: ${{ matrix.content-type }}
