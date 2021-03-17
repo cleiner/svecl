@@ -62,7 +62,7 @@ func (m *importMap) resolve(specifier string) (string, error) {
 	if len(result) == 0 {
 		return "", fmt.Errorf("Unable to resolve specifier '%s'", specifier)
 	}
-	return result, nil
+	return filepath.Clean(result), nil
 }
 
 func (m *importMap) isRelativeOrAbsolute(specifier string) bool {
