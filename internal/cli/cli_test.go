@@ -111,7 +111,7 @@ func TestImportMapResolveError(t *testing.T) {
 func TestImportMapSuccess(t *testing.T) {
 	output, rc := run([]string{"--import-map=test/im_ok.json", "--minify", "test/js/root.js"})
 	assertEqual(t, rc, 0)
-	assertEqual(t, output, "(()=>{var r=\"@sib\";var t=\"@lib\";var b=\"@lib/ref\";var o=\"@sub:a\";var e=o+\"+@sub:b\";var f=\"@sub:c\";console.log(r,t,b,o,e,f);})();\n")
+	assertEqual(t, output, "(()=>{var f=\"@sib\";var e=\"@lib/ref\",b=()=>42,r=()=>b(),t=()=>b()+1;var i=\"@lib\";var o=\"@sub:a\";var m=o+\"+@sub:b\";var p=\"@sub:c\";console.log(f,i,e,o,m,p,r,t);})();\n")
 }
 
 func TestSvelteError(t *testing.T) {
