@@ -45,7 +45,11 @@ func newImportMapFromJSON(content []byte, basePath string) (*importMap, error) {
 
 func normalizeResolutionResults(specifierMap specifierMap, basePath string) {
 	for k, v := range specifierMap {
-		specifierMap[k] = basePath + filepath.FromSlash(v)
+		suffix := ""
+		if strings.HasSuffix(v, "/") {
+			suffix = "/"
+		}
+		specifierMap[k] = filepath.Clean(basePath+filepath.FromSlash(v)) + suffix
 	}
 }
 
