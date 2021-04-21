@@ -31,10 +31,10 @@ jobs:
     - name: Test
       run: 'go test -v ./...'
     - name: Zip
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       run: 'Compress-Archive -CompressionLevel Optimal -Force -Path LICENSE,NOTICE.md,svecl.exe -DestinationPath ${{ matrix.artifact }}'
     - name: Tar
-      if: matrix.os != 'windows-latest'
+      if: runner.os != 'Windows'
       run: 'tar -czvf ${{ matrix.artifact }} LICENSE NOTICE.md svecl'
     - name: Upload
       uses: actions/upload-artifact@v2
