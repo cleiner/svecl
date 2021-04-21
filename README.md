@@ -14,7 +14,8 @@ Run with `--help` or `-h` for options.
 
 ## Development
 
-Note: A C compiler is required to build the QuickJS dependency. On Windows you can follow the instructions for MSYS2 as described here: https://github.com/rogchap/v8go#windows
+Note: A C++ compiler is required to build and link with the v8go dependency. On Windows you can follow
+the instructions for MSYS2 as described here: https://github.com/rogchap/v8go#windows
 
 Build: `go build ./cmd/...`
 
