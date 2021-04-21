@@ -14,5 +14,5 @@ const compile = (source, options) => {
     }
     result = { code: null, messages: [{ type: 'error', message: e.message, ...e }] };
   }
-  return result;
+  return JSON.stringify(result);
 };

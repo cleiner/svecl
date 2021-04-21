@@ -2,11 +2,11 @@ package svelte
 
 import (
 	"embed"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
-	"github.com/cleiner/quickjs"
+	"rogchap.com/v8go"
 )
 
 //go:embed resources
@@ -15,12 +15,12 @@ var resources embed.FS
 const resourcePath = "resources/"
 
 var globalScripts = []string{
-	"url-polyfill.js", "env.js", "base64.js", "compiler.js", "main.js",
+	"env.js", "base64.js", "url-polyfill.js", "compiler.js", "main.js",
 }
 
 // Compiler compiles Svelte components to JavaScript
 type Compiler struct {
-	ctx *quickjs.Context
+	ctx *v8go.Context
 }
 
 // Location represents a source file location
@@ -60,92 +60,57 @@ func NewCompiler() (*Compiler, error) {
 	return &Compiler{ctx: ctx}, nil
 }
 
-func newJavaScriptEngine() (*quickjs.Context, error) {
-	runtime := quickjs.NewRuntime()
-	ctx := runtime.NewContext()
-	// TODO runtime + ctx are never freed
+func newJavaScriptEngine() (*v8go.Context, error) {
+	iso, err := v8go.NewIsolate()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err := v8go.NewContext(iso)
+	if err != nil {
+		return nil, err
+	}
 	return ctx, nil
 }
 
-func initGlobalScope(ctx *quickjs.Context) error {
+func initGlobalScope(ctx *v8go.Context) error {
 	for _, file := range globalScripts {
-		result, err := evalScript(resourcePath+file, ctx)
+		_, err := evalScript(resourcePath+file, ctx)
 		if err != nil {
 			return fmt.Errorf("%+v", err)
 		}
-		defer result.Free()
 	}
 	return nil
 }
 
-func evalScript(path string, ctx *quickjs.Context) (*quickjs.Value, error) {
+func evalScript(path string, ctx *v8go.Context) (*v8go.Value, error) {
 	bytes, err := resources.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	result, err := ctx.EvalFile(string(bytes), filepath.Base(path))
-	if err != nil {
-		return nil, formatJSError(err)
-	}
-	return &result, nil
-}
-
-func formatJSError(err error) error {
-	var evalErr *quickjs.Error
-	if errors.As(err, &evalErr) {
-		return fmt.Errorf("JS: %s\n%s\n'%+v'", evalErr.Cause, evalErr.Stack, evalErr.Error())
-	}
-	return err
+	return ctx.RunScript(string(bytes), filepath.Base(path))
 }
 
 // Compile translates a Svelte component into vanilla JavaScript
 func (svc *Compiler) Compile(source string, filename string) (*CompileResult, error) {
-	svc.ctx.Globals().Set("source", svc.ctx.String(source))
-	svc.ctx.Globals().Set("filename", svc.ctx.String(filename))
-	val, err := svc.ctx.EvalFile("compile(source, { filename });", "compile_call")
+	svc.ctx.Global().Set("source", source)
+	svc.ctx.Global().Set("filename", filename)
+	val, err := svc.ctx.RunScript("compile(source, { filename });", "compile_call")
 	if err != nil {
-		return nil, formatJSError(err)
+		return nil, fmt.Errorf("%+v", err)
 	}
-	defer val.Free()
-	code := val.Get("code").String()
-	result := CompileResult{
-		Code:     &code,
-		Messages: convertMessagesFromJS(val.Get("messages")),
+	result := CompileResult{}
+	err = json.Unmarshal([]byte(val.String()), &result)
+	if err != nil {
+		return nil, err
 	}
 	return &result, nil
 }
 
-func convertMessagesFromJS(messages quickjs.Value) *[]Message {
-	result := make([]Message, messages.Len())
-	for i := 0; i < int(messages.Len()); i++ {
-		msg := messages.GetByUint32(uint32(i))
-		result[i] = Message{
-			Type:     msg.Get("type").String(),
-			Code:     msg.Get("code").String(),
-			Message:  msg.Get("message").String(),
-			Filename: msg.Get("filename").String(),
-			Frame:    msg.Get("frame").String(),
-			Start:    *convertLocationFromJS(msg.Get("start")),
-			End:      *convertLocationFromJS(msg.Get("end")),
-		}
-	}
-	return &result
-}
-
-func convertLocationFromJS(loc quickjs.Value) *Location {
-	return &Location{
-		Line:      int(loc.Get("line").Int32()),
-		Column:    int(loc.Get("column").Int32()),
-		Character: int(loc.Get("character").Int32()),
-	}
-}
-
 // Version returns the version of the embedded Svelte compiler
 func (svc *Compiler) Version() string {
-	val, err := svc.ctx.EvalFile("svelte.VERSION", "version_call")
+	val, err := svc.ctx.RunScript("svelte.VERSION", "version_call")
 	if err != nil {
-		panic(formatJSError(err))
+		panic(err)
 	}
-	defer val.Free()
 	return val.String()
 }

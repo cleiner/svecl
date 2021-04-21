@@ -1,3 +1,3 @@
 package main
 
-const sveclVersion = "0.1.2"
+const sveclVersion = "0.2.0"
