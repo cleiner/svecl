@@ -4,7 +4,9 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"rogchap.com/v8go"
 )
@@ -15,7 +17,7 @@ var resources embed.FS
 const resourcePath = "resources/"
 
 var globalScripts = []string{
-	"env.js", "base64.js", "url-polyfill.js", "compiler.js", "main.js",
+	"env.js", "base64.js", "url-polyfill.js", "main.js",
 }
 
 // Compiler compiles Svelte components to JavaScript
@@ -48,12 +50,16 @@ type CompileResult struct {
 }
 
 // NewCompiler creates a new compiler instance
-func NewCompiler() (*Compiler, error) {
+func NewCompiler(svelteCompilerPath string) (*Compiler, error) {
 	ctx, err := newJavaScriptEngine()
 	if err != nil {
 		return nil, err
 	}
 	err = initGlobalScope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = loadSvelteCompiler(ctx, svelteCompilerPath)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +80,7 @@ func newJavaScriptEngine() (*v8go.Context, error) {
 
 func initGlobalScope(ctx *v8go.Context) error {
 	for _, file := range globalScripts {
-		_, err := evalScript(resourcePath+file, ctx)
+		_, err := evalScript(resourcePath+file, ctx, resources.ReadFile)
 		if err != nil {
 			return fmt.Errorf("%+v", err)
 		}
@@ -82,12 +88,34 @@ func initGlobalScope(ctx *v8go.Context) error {
 	return nil
 }
 
-func evalScript(path string, ctx *v8go.Context) (*v8go.Value, error) {
-	bytes, err := resources.ReadFile(path)
+func evalScript(path string, ctx *v8go.Context, readFile func(path string) ([]byte, error)) (*v8go.Value, error) {
+	bytes, err := readFile(path)
 	if err != nil {
 		return nil, err
 	}
 	return ctx.RunScript(string(bytes), filepath.Base(path))
+}
+
+func loadSvelteCompiler(ctx *v8go.Context, svelteCompilerPath string) error {
+	basePath := resourcePath
+	readFile := resources.ReadFile
+	if svelteCompilerPath != "" {
+		basePath = appendSeparator(svelteCompilerPath)
+		readFile = os.ReadFile
+	}
+	_, err := evalScript(basePath+"compiler.js", ctx, readFile)
+	if err != nil {
+		return fmt.Errorf("%+v", err)
+	}
+	return nil
+}
+
+func appendSeparator(path string) string {
+	separator := string(filepath.Separator)
+	if strings.HasSuffix(path, separator) {
+		return path
+	}
+	return path + separator
 }
 
 // Compile translates a Svelte component into vanilla JavaScript

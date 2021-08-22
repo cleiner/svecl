@@ -49,6 +49,8 @@ func helpText(version string, colors colors) string {
                         default browser)
   --sourcemap           Emit a source map
   --splitting           Enable code splitting (currently only for esm)
+  --svelte=...          The path to the Svelte distribution (compiler.js) to
+                        use to compile components instead of the built-in one
   --target=...          Environment target (e.g. es2017, chrome58, firefox57,
                         safari11, edge16, node10, default esnext)
 ` + colors.Bold + `Advanced options:` + colors.Default + `
@@ -104,6 +106,7 @@ func Run(osArgs []string, version string) int {
 	}
 
 	importMap := ""
+	svelteCompilerPath := ""
 	argsEnd := 0
 	for _, arg := range osArgs {
 		switch {
@@ -112,12 +115,15 @@ func Run(osArgs []string, version string) int {
 			return 0
 
 		case arg == "--version":
-			compiler, _ := svelte.NewCompiler()
+			compiler, _ := svelte.NewCompiler("")
 			fmt.Printf("%s (Svelte %s)\n", version, compiler.Version())
 			return 0
 
 		case strings.HasPrefix(arg, "--import-map="):
 			importMap = arg[len("--import-map="):]
+
+		case strings.HasPrefix(arg, "--svelte="):
+			svelteCompilerPath = arg[len("--svelte="):]
 
 		default:
 			// remove (overwrite) handled arguments
@@ -136,7 +142,7 @@ func Run(osArgs []string, version string) int {
 	options.Bundle = true
 	options.Write = true
 	options.LogLevel = api.LogLevelInfo
-	options.Plugins = []api.Plugin{svelte.Loader}
+	options.Plugins = []api.Plugin{svelte.NewSvelteLoader(svelteCompilerPath)}
 
 	if len(importMap) > 0 {
 		options.Plugins = append(options.Plugins, importmap.NewResolver(importMap))
