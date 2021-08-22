@@ -126,3 +126,9 @@ func TestSvelteSuccessWithWarning(t *testing.T) {
 	assertContains(t, output, "warning: [svelte] A11y: <img> element should have an alt attribute")
 	assertContains(t, output, "extends SvelteComponent", "var view_default = View;")
 }
+
+func TestExternalSvelte(t *testing.T) {
+	output, rc := run([]string{"--import-map=test/im_svelte.json", "--svelte=../svelte/resources", "test/js/view.svelte"})
+	assertEqual(t, rc, 0)
+	assertContains(t, output, "extends SvelteComponent")
+}

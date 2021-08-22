@@ -13,20 +13,20 @@ import (
 
 type compilerPool chan *Compiler
 
-func newCompilerPool(size int) compilerPool {
+func newCompilerPool(size int, svelteCompilerPath string) compilerPool {
 	pool := make(compilerPool, size)
 	var wg sync.WaitGroup
 	for i := 0; i < cap(pool); i++ {
 		wg.Add(1)
-		go initPoolEntry(&pool, &wg)
+		go initPoolEntry(&pool, &wg, svelteCompilerPath)
 	}
 	wg.Wait()
 	return pool
 }
 
-func initPoolEntry(pool *compilerPool, wg *sync.WaitGroup) {
+func initPoolEntry(pool *compilerPool, wg *sync.WaitGroup, svelteCompilerPath string) {
 	defer wg.Done()
-	svc, err := NewCompiler()
+	svc, err := NewCompiler(svelteCompilerPath)
 	if err != nil {
 		panic(err)
 	}
@@ -42,32 +42,34 @@ func (p compilerPool) put(svc *Compiler) {
 }
 
 // Loader compiles .svelte files
-var Loader = api.Plugin{
-	Name: "svelte",
-	Setup: func(build api.PluginBuild) {
-		sveltePool := newCompilerPool(runtime.NumCPU())
+func NewSvelteLoader(svelteCompilerPath string) api.Plugin {
+	return api.Plugin{
+		Name: "svelte",
+		Setup: func(build api.PluginBuild) {
+			sveltePool := newCompilerPool(runtime.NumCPU(), svelteCompilerPath)
 
-		callback := func(args api.OnLoadArgs) (api.OnLoadResult, error) {
-			bytes, err := os.ReadFile(args.Path)
-			if err != nil {
-				return api.OnLoadResult{}, err
+			callback := func(args api.OnLoadArgs) (api.OnLoadResult, error) {
+				bytes, err := os.ReadFile(args.Path)
+				if err != nil {
+					return api.OnLoadResult{}, err
+				}
+				svelte := sveltePool.get()
+				defer sveltePool.put(svelte)
+				result, err := svelte.Compile(string(bytes), filepath.Base(args.Path))
+				if err != nil {
+					return api.OnLoadResult{}, err
+				}
+				return api.OnLoadResult{
+					Contents: result.Code,
+					Loader:   api.LoaderJS,
+					Errors:   convertMessages(result.Messages, "error"),
+					Warnings: convertMessages(result.Messages, "warning"),
+				}, nil
 			}
-			svelte := sveltePool.get()
-			defer sveltePool.put(svelte)
-			result, err := svelte.Compile(string(bytes), filepath.Base(args.Path))
-			if err != nil {
-				return api.OnLoadResult{}, err
-			}
-			return api.OnLoadResult{
-				Contents: result.Code,
-				Loader:   api.LoaderJS,
-				Errors:   convertMessages(result.Messages, "error"),
-				Warnings: convertMessages(result.Messages, "warning"),
-			}, nil
-		}
 
-		build.OnLoad(api.OnLoadOptions{Filter: `\.svelte$`}, callback)
-	},
+			build.OnLoad(api.OnLoadOptions{Filter: `\.svelte$`}, callback)
+		},
+	}
 }
 
 func convertMessages(messages *[]Message, kind string) []api.Message {
